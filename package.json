@@ -1,0 +1,25 @@
+{
+  "name": "wspavisame",
+  "version": "1.0.0",
+  "description": "Monitorea Gmail por transacciones y notifica por WhatsApp.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "gmail",
+    "imap",
+    "notifications"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "imap-simple": "^5.1.0",
+    "lodash": "^4.17.21",
+    "mailparser": "^3.7.1",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.23.0"
+  }
+}

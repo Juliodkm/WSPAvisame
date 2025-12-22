@@ -1,0 +1,9 @@
+# Credenciales y secretos
+.env
+
+# Dependencias
+node_modules/
+
+# Archivos de sesión y caché de WhatsApp
+.wwebjs_auth/
+.wwebjs_cache/
