@@ -2,11 +2,10 @@ require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const imaps = require('imap-simple');
+const { simpleParser } = require('mailparser');
 const _ = require('lodash');
 
-// --- CONFIGURACIÓN Y BARRERA DE TIEMPO ---
-const SCRIPT_START_TIME = new Date();
-
+// --- CONFIGURACIÓN ---
 const imapConfig = {
     imap: {
         user: process.env.EMAIL_USER,
@@ -24,12 +23,15 @@ const MONITORING_INTERVAL = 60000; // 60 segundos
 const ALLOWED_SENDER = "notificaciones@notificacionesbcp.com.pe";
 
 if (!WHATSAPP_NUMBER || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error("Error: Faltan variables de entorno. Asegúrate de que tu archivo .env esté completo.");
+    console.error("CRITICAL: Faltan variables de entorno. El sistema no puede iniciar.");
     process.exit(1);
 }
 
+// --- VARIABLE DE MEMORIA ---
+let ultimoUIDProcesado = null;
+
 // --- CLIENTE DE WHATSAPP ---
-console.log('Inicializando cliente de WhatsApp...');
+console.log('Iniciando cliente de WhatsApp...');
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { args: ['--no-sandbox'] }
@@ -37,99 +39,131 @@ const client = new Client({
 
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
-    console.log('Escanea el código QR para iniciar sesión.');
+    console.log('Escanee el QR para iniciar sesión.');
 });
 
-client.on('ready', async () => {
-    console.log('✅ Cliente de WhatsApp está listo.');
-    console.log('----------------------------------------------------------------');
-    console.log(`🕒 Sistema iniciado: ${SCRIPT_START_TIME.toLocaleString()}`);
-    console.log(`   Solo se procesarán correos posteriores a esta hora.`);
-    console.log(`   Solo se notificará de: ${ALLOWED_SENDER}`);
-    console.log('----------------------------------------------------------------');
-    
+client.on('ready', () => {
+    console.log('✅ Cliente de WhatsApp listo.');
+    console.log('================================================================');
     console.log(`Iniciando monitoreo de correo cada ${MONITORING_INTERVAL / 1000} segundos.`);
-    checkNewEmails();
-    setInterval(checkNewEmails, MONITORING_INTERVAL);
+    console.log('MODO FILTRO DE FECHA (SINCE): Buscando correos de las últimas 24 horas.');
+    console.log('================================================================');
+    checkRecentEmails();
+    setInterval(checkRecentEmails, MONITORING_INTERVAL);
 });
 
-client.on('auth_failure', (msg) => console.error('❌ Fallo en la autenticación de WhatsApp:', msg));
-client.on('disconnected', (reason) => console.warn('Cliente de WhatsApp desconectado:', reason));
+client.on('auth_failure', (msg) => console.error('CRITICAL: Fallo en la autenticación de WhatsApp:', msg));
+client.on('disconnected', (reason) => console.warn('AVISO: Cliente de WhatsApp desconectado:', reason));
 
 client.initialize();
 
-/**
- * REESCRITO: Usa una barrera de tiempo y marca los correos como leídos.
- * Busca correos no leídos y los filtra por fecha y remitente.
- */
-async function checkNewEmails() {
+async function checkRecentEmails() {
     let connection;
     try {
+        // Definir el Filtro de Tiempo
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        // Clave: Configurar el criterio de búsqueda para ser ultra rápido
+        const searchCriteria = [
+            ['SINCE', yesterday.toISOString()],
+            ['FROM', ALLOWED_SENDER] // Mantenemos el filtro de remitente por eficiencia
+        ];
+
+        console.log(`\nBuscando correos desde ${yesterday.toLocaleString()}...`);
         connection = await imaps.connect(imapConfig);
         await connection.openBox('INBOX');
 
-        // Busca todos los correos NO LEÍDOS
-        const searchCriteria = ['UNSEEN'];
-        const fetchOptions = {
-            bodies: ['HEADER.FIELDS (FROM SUBJECT DATE)'] ,
-            markSeen: false // No marcar como leído automáticamente al buscar
-        };
+        const fetchOptions = { bodies: ['HEADER', 'TEXT', ''], markSeen: false };
         const messages = await connection.search(searchCriteria, fetchOptions);
 
         if (messages.length === 0) {
-            // Silencio absoluto si no hay nada nuevo
+            console.log("No se encontraron correos recientes del BCP.");
             await connection.end();
             return;
         }
 
-        for (const message of messages) {
-            const attributes = message.attributes;
-            const header = _.get(message, 'parts[0].body', null);
-            if (!header || !header.from || !header.subject || !attributes.date) {
-                continue;
-            }
-            
-            const emailDate = new Date(attributes.date);
-            
-            // --- FILTRO DOBLE Y ESTRICTO ---
+        // Obtener el Último correo de los resultados
+        const lastMessage = messages.slice(-1)[0];
+        
+        // --- VALIDACIÓN DE UID PARA EVITAR REPETICIONES ---
+        if (lastMessage.attributes.uid === ultimoUIDProcesado) {
+            console.log('💤 Sin novedades. El último correo ya fue notificado.');
+            await connection.end();
+            return;
+        }
 
-            // 1. Condición de Fecha: Ignora todo lo que sea anterior o igual a la hora de inicio.
-            if (emailDate <= SCRIPT_START_TIME) {
-                continue; // Silencio absoluto
-            }
+        console.log(`Se encontraron ${messages.length} correos recientes. Analizando el último (UID: ${lastMessage.attributes.uid})...`);
 
-            const from = header.from[0];
-            // 2. Condición de Remitente
-            if (!from.includes(ALLOWED_SENDER)) {
-                continue; // Silencio absoluto
-            }
+        const header = lastMessage.parts.find(part => part.which === 'HEADER').body;
+        const subject = header.subject ? header.subject[0] : 'Sin Asunto';
+        const emailDate = new Date(lastMessage.attributes.date);
 
-            // --- ACCIÓN: Solo se ejecuta si pasa ambos filtros ---
-            const subject = header.subject[0];
-            const horaCorreo = emailDate.toLocaleTimeString();
+        console.log('------------------------------------------------');
+        console.log(`📩 Procesando correo: ${subject}`);
+        console.log(`⏰ Fecha: ${emailDate.toLocaleString()}`);
 
-            console.log(`✅ Nuevo BCP detectado [Hora: ${horaCorreo}] Enviando alerta...`);
-            
-            const messageBody = `🔔 *Nueva Transacción Detectada*\n\n*Asunto:* ${subject}`;
-            const chatId = `${WHATSAPP_NUMBER}@c.us`;
-
-            try {
-                await client.sendMessage(chatId, messageBody);
-
-                // MUY IMPORTANTE: Marcar como leído para no volver a notificar
-                await connection.addFlags(attributes.uid, ['\Seen']);
-
-            } catch (whatsappError) {
-                console.error('  ❌ Error al enviar el mensaje de WhatsApp:', whatsappError);
-            }
+        const bodyPart = lastMessage.parts.find(part => part.which === '');
+        if (!bodyPart) {
+            console.log('⚠️ ADVERTENCIA: No se pudo encontrar el cuerpo completo del correo.');
+            return;
         }
         
-        await connection.end();
+        simpleParser(bodyPart.body, async (err, parsed) => {
+            if (err) {
+                console.error('⚠️ ERROR PARSING:', err);
+                return;
+            }
+
+            const textContent = parsed.text || '';
+            
+            // Depuración Visual del Texto Parseado
+            console.log('--- INICIO DEL TEXTO PARSEADO ---');
+            console.log(textContent.substring(0, 300) + '...');
+            console.log('--- FIN DEL TEXTO PARSEADO ---');
+            
+            // Nuevas Regex para ignorar asteriscos y ser más flexible
+            const regexMonto = /(?:Monto transferido|transferencia de)\s*\*?(?:S\/|USD|\$)\s?([\d,.]+)/i;
+            const regexCuenta = /desde tu\s*\*?([a-zA-Z0-9\s]+)(?:\*|\.)/i;
+
+            const amountMatch = textContent.match(regexMonto);
+            const accountMatch = textContent.match(regexCuenta);
+            
+            if (amountMatch) {
+                const montoDetectado = `S/ ${amountMatch[1]}`;
+                const cuentaOrigen = accountMatch ? accountMatch[1].trim() : "No detectada";
+
+                console.log(`   -> ÉXITO: Monto detectado: ${montoDetectado}`);
+                console.log(`   -> Origen detectado: ${cuentaOrigen}`);
+                
+                const messageBody = `💰 *Transferencia Detectada*\n` +
+                                  `📅 *Fecha:* ${emailDate.toLocaleTimeString()}\n` +
+                                  `💸 *Monto:* ${montoDetectado}\n` +
+                                  `💳 *Cuenta:* ${cuentaOrigen}\n` +
+                                  `📝 *Asunto:* ${subject}`;
+
+                const chatId = `${WHATSAPP_NUMBER}@c.us`;
+                try {
+                    await client.sendMessage(chatId, messageBody);
+                    console.log('✅ Notificación enviada por WhatsApp.');
+                    
+                    // --- ACTUALIZACIÓN DE MEMORIA ---
+                    ultimoUIDProcesado = lastMessage.attributes.uid;
+                    console.log(`✅ Nuevo correo procesado (UID: ${ultimoUIDProcesado}). Actualizando memoria.`);
+
+                } catch (whatsappError) {
+                    console.error('CRITICAL: Error al enviar el mensaje de WhatsApp:', whatsappError);
+                }
+            } else {
+                console.log('ℹ️ INFO: El último correo no contenía un monto de transferencia claro.');
+            }
+        });
 
     } catch (error) {
-        if (!error.message.includes('Nothing to fetch')) {
-           console.error('❌ Error durante el ciclo de monitoreo:', error.message);
+        console.error('CRITICAL: Error en el ciclo de monitoreo:', error.stack);
+    } finally {
+        if (connection && connection.state !== 'disconnected') {
+            await connection.end();
         }
-        if (connection) await connection.end();
     }
 }
