@@ -1,45 +1,48 @@
-# WSPAvisame - Notificaciones Bancarias a WhatsApp
+# WSPAvisame 🤖💸
 
-Un bot que monitorea los correos electrónicos de una cuenta de Gmail en busca de notificaciones del BCP (Banco de Crédito del Perú) y las envía como alertas a un número de WhatsApp. El bot filtra los correos por fecha (solo procesa los correos del día actual) y por remitente.
+**WSPAvisame** es un bot automatizado desarrollado en Node.js que monitorea tu bandeja de entrada de Gmail en tiempo real. Su función principal es detectar correos de transferencias bancarias (específicamente del BCP), leer el monto y el detalle, y notificarte instantáneamente a tu WhatsApp personal.
 
-## Requisitos
+---
 
-*   **Node.js:** Asegúrate de tener Node.js instalado en tu sistema.
-*   **Cuenta de Gmail:** Necesitarás una cuenta de Gmail con una **"Contraseña de Aplicación"** habilitada. No uses tu contraseña principal. Puedes generar una Contraseña de Aplicación desde la configuración de seguridad de tu cuenta de Google.
+## 🚀 ¿Cómo funciona el sistema?
 
-## Instalación
+El sistema opera en un ciclo continuo de 60 segundos bajo la siguiente lógica:
 
-Sigue estos pasos para poner en marcha el bot:
+1.  **Conexión IMAP:** Se conecta de forma segura a Gmail usando `imap-simple`.
+2.  **Filtro Inteligente de Tiempo:** Para evitar saturación, solo analiza los correos recibidos en las **últimas 24 horas**.
+3.  **Filtrado de Remitente:** Verifica estrictamente que el correo provenga de `notificaciones@notificacionesbcp.com.pe`.
+4.  **Sistema Anti-Spam (Memoria UID):**
+    * Cada correo tiene un ID único (UID).
+    * El bot memoriza el UID del último correo notificado.
+    * Si vuelve a leer el mismo correo, lo ignora para no enviarte mensajes repetidos.
+5.  **Extracción de Datos (Parsing):**
+    * Convierte el HTML del correo en texto.
+    * Usa **Expresiones Regulares (Regex)** avanzadas para encontrar el monto (ej: `*S/ 20.00*`), ignorando los asteriscos de las negritas.
+6.  **Notificación WhatsApp:** Usa `whatsapp-web.js` (que simula un navegador Chrome) para enviar el mensaje formateado a tu celular.
 
-1.  **Clonar el repositorio:**
-    ```bash
-    git clone <URL_DEL_REPOSITORIO>
-    cd WSPAvisame
-    ```
+---
 
-2.  **Instalar dependencias:**
-    Ejecuta el siguiente comando para instalar todas las librerías necesarias.
-    ```bash
-    npm install
-    ```
+## 📂 Estructura del Proyecto
 
-3.  **Configurar las variables de entorno:**
-    Copia el archivo de ejemplo `.env.example` a un nuevo archivo llamado `.env`.
-    ```bash
-    copy .env.example .env
-    ```
-    Luego, abre el archivo `.env` y rellena tus credenciales:
-    *   `GMAIL_USER`: Tu dirección de correo de Gmail.
-    *   `GMAIL_APP_PASSWORD`: Tu Contraseña de Aplicación de Gmail.
-    *   `WHATSAPP_RECIPIENT`: El número de WhatsApp que recibirá las notificaciones (en formato `xxxxxxxxxx@c.us`, por ejemplo: `51987654321@c.us`).
+* `src/index.js`: El cerebro del bot. Contiene toda la lógica de conexión, lectura y envío.
+* `.wwebjs_auth/`: Carpeta (generada automáticamente) donde se guarda la sesión de WhatsApp para no escanear el QR cada vez.
+* `.env`: Archivo de seguridad donde van tus claves (Correo, Contraseña de App, Número).
+* `package.json`: Lista de dependencias (librerías) que el bot necesita para vivir.
 
-4.  **Iniciar el bot:**
-    Ejecuta el siguiente comando para iniciar el bot.
-    ```bash
-    npm start
-    ```
-    La primera vez que lo ejecutes, se generará un código QR en la terminal. Escanéalo con la aplicación de WhatsApp en tu teléfono para vincular tu cuenta.
+---
 
-## Nota de Privacidad
+## 🛠️ Instalación y Uso
 
-Tus credenciales de Gmail y la sesión de WhatsApp se almacenan localmente en tu máquina dentro de los archivos `.env` y la carpeta `.wwebjs_auth` respectivamente. **Estos datos son privados y no se suben a ningún servicio en la nube.** El archivo `.gitignore` está configurado para evitar que estos archivos sensibles se compartan accidentalmente en un repositorio de Git.
+Sigue estos pasos para ponerlo en marcha en tu computadora:
+
+### 1. Requisitos
+* Tener **Node.js** instalado.
+* Una cuenta de Gmail con "Verificación de 2 pasos" activada y una **Contraseña de Aplicación** generada.
+
+### 2. Instalación
+Clona el proyecto e instala las librerías:
+
+```bash
+git clone [https://github.com/Juliodkm/WSPAvisame.git](https://github.com/Juliodkm/WSPAvisame.git)
+cd WSPAvisame
+npm install
