@@ -1,47 +1,42 @@
 # WSPAvisame 🤖💸
 
-**WSPAvisame** es un bot automatizado desarrollado en Node.js que monitorea tu bandeja de entrada de Gmail en tiempo real. Su función principal es detectar correos de transferencias bancarias (específicamente del BCP), leer el monto y el detalle, y notificarte instantáneamente a tu WhatsApp personal.
+**WSPAvisame** es un bot de notificaciones automatizado, desarrollado en Node.js, que monitorea tu bandeja de entrada de Gmail en tiempo real. Su misión es detectar transferencias bancarias (específicamente del BCP), leer el monto y el detalle, y avisarte al instante vía WhatsApp.
 
 ---
 
 ## 🚀 ¿Cómo funciona el sistema?
 
-El sistema opera en un ciclo continuo de 60 segundos bajo la siguiente lógica:
+El bot ejecuta un ciclo de vigilancia cada 60 segundos con la siguiente lógica:
 
-1.  **Conexión IMAP:** Se conecta de forma segura a Gmail usando `imap-simple`.
-2.  **Filtro Inteligente de Tiempo:** Para evitar saturación, solo analiza los correos recibidos en las **últimas 24 horas**.
-3.  **Filtrado de Remitente:** Verifica estrictamente que el correo provenga de `notificaciones@notificacionesbcp.com.pe`.
-4.  **Sistema Anti-Spam (Memoria UID):**
-    * Cada correo tiene un ID único (UID).
-    * El bot memoriza el UID del último correo notificado.
-    * Si vuelve a leer el mismo correo, lo ignora para no enviarte mensajes repetidos.
-5.  **Extracción de Datos (Parsing):**
-    * Convierte el HTML del correo en texto.
-    * Usa **Expresiones Regulares (Regex)** avanzadas para encontrar el monto (ej: `*S/ 20.00*`), ignorando los asteriscos de las negritas.
-6.  **Notificación WhatsApp:** Usa `whatsapp-web.js` (que simula un navegador Chrome) para enviar el mensaje formateado a tu celular.
+1.  **Conexión Segura:** Se conecta a Gmail mediante el protocolo IMAP (`imap-simple`).
+2.  **Filtro de Eficiencia:** Para evitar lentitud, solo analiza correos recibidos en las **últimas 24 horas**.
+3.  **Validación de Origen:** Confirma que el remitente sea oficial (`notificaciones@notificacionesbcp.com.pe`).
+4.  **Memoria Anti-Spam (UID):**
+    * El sistema memoriza el identificador único (UID) del último correo procesado.
+    * Si vuelve a encontrar el mismo correo, lo ignora para evitar notificaciones repetidas.
+5.  **Decodificación (Parsing):**
+    * Transforma el contenido HTML del correo a texto plano.
+    * Utiliza **Expresiones Regulares (Regex)** para extraer datos clave (Monto y Cuenta), incluso si vienen con formato de negritas (ej: `*S/ 10.00*`).
+6.  **Alerta WhatsApp:** Envía un mensaje formateado a tu celular usando `whatsapp-web.js` (sin costo de API).
 
 ---
 
 ## 📂 Estructura del Proyecto
 
-* `src/index.js`: El cerebro del bot. Contiene toda la lógica de conexión, lectura y envío.
-* `.wwebjs_auth/`: Carpeta (generada automáticamente) donde se guarda la sesión de WhatsApp para no escanear el QR cada vez.
-* `.env`: Archivo de seguridad donde van tus claves (Correo, Contraseña de App, Número).
-* `package.json`: Lista de dependencias (librerías) que el bot necesita para vivir.
+* **`src/index.js`**: El núcleo del código. Maneja la conexión IMAP, la lógica de negocio y el envío de mensajes.
+* **`.wwebjs_auth/`**: Carpeta de sesión de WhatsApp (se crea sola). Guarda tus credenciales para no escanear el QR a cada rato.
+* **`.env`**: Archivo de variables de entorno. Aquí van tus claves secretas (no se sube a GitHub).
+* **`.env.example`**: Plantilla de guía para configurar el archivo `.env`.
 
 ---
 
-## 🛠️ Instalación y Uso
+## 🛠️ Instalación y Configuración
 
-Sigue estos pasos para ponerlo en marcha en tu computadora:
+### 1. Requisitos Previos
+* **Node.js** instalado en tu PC.
+* Cuenta de **Gmail** con "Verificación de 2 pasos" y una **Contraseña de Aplicación** generada.
 
-### 1. Requisitos
-* Tener **Node.js** instalado.
-* Una cuenta de Gmail con "Verificación de 2 pasos" activada y una **Contraseña de Aplicación** generada.
-
-### 2. Instalación
-Clona el proyecto e instala las librerías:
-
+### 2. Clonar e Instalar
 ```bash
 git clone [https://github.com/Juliodkm/WSPAvisame.git](https://github.com/Juliodkm/WSPAvisame.git)
 cd WSPAvisame
